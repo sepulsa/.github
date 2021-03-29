@@ -3,11 +3,9 @@ name: "Post-Integration: Regression Test"
 on:
   push:
     branches: [ $default-branch ]
-
   workflow_dispatch:
 
 env:
-  MAVEN_OPTS: "-Djansi.force=true"
   # Repository of regression test in format <organization>/<repository>.
   REPOSITORY: ""
   # Maven project under monorepo of regression test.
@@ -47,5 +45,60 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml', '${{ env.PROJECT }}/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - run: mvn -pl ${PROJECT} test -ntp
-      - run: mvn -pl ${PROJECT} verify -ntp
+      # Optional. Switching UAT Environment if using k8s AWS. 
+      # Need AWS user and secret preconfigured.
+       - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-1
+      - run: brew install aws-iam-authenticator
+      - name: Setting up Kubectl
+        uses: azure/k8s-set-context@v1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+        id: setcontext
+      # Change kubectl command for the correct one  
+      - name: Switching on UAT Environment
+        run: |
+          kubectl get deployment
+
+      - name: Build Reportportal Properties
+        env:
+          MODULE_PATH: example-serenity-cucumber
+        run: |
+          NOW=$(date +%d%m%Y)
+          echo "" >> ${{ env.PROJECT }}/reportportal.properties
+          echo "rp.description=Regression $NOW - Github Action #$GITHUB_RUN_NUMBER" >> ${{ env.PROJECT }}/reportportal.properties
+          echo "rp.attributes=release:$NOW" >> ${{ env.PROJECT }}/reportportal.properties
+          cat ${{ env.PROJECT }}/reportportal.properties
+          cp ${{ env.PROJECT }}/reportportal.properties ${{ env.PROJECT }}/src/test/resources/reportportal.properties
+
+      - name: Run Regression
+        run: mvn -pl ${PROJECT} verify -q
+
+      # Optional. It will take some artifact storage quota.
+      # Disable if dont needed. 
+      - name: Uploading Result Data
+        if: ${{ success() || failure() }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: Result
+          path: ${{ env.PROJECT }}/target/site
+
+      # Need Zephyr Scale Key preconfigured.    
+      - name: Sending Result to Zephyr Scale
+        if: ${{ success() || failure() }}
+        env:
+          ZEPHYR_API_KEY: ${{ secrets.TM4J_KEY }}
+          PROJECT_KEY: ABCD
+          JSON_PATH: ${{ env.PROJECT }}/target/cucumber-parallel/*.json
+        run: |
+          zip result.zip $JSON_PATH
+          curl --request POST \
+              --url "https://api.adaptavist.io/tm4j/v2/automations/executions/cucumber?projectKey=$PROJECT_KEY&autoCreateTestCases=false" \
+              --header "Authorization: Bearer $ZEPHYR_API_KEY" \
+              --header 'content-type: multipart/form-data' \
+              --form "file=@result.zip;type=application/x-zip-compressed"
