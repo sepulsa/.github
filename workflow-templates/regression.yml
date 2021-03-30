@@ -45,22 +45,17 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml', '${{ env.PROJECT }}/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Build Reportportal Properties
-        env:
-          MODULE_PATH: example-serenity-cucumber
+      - name: Run Regression
+        # Set report portal parameters via JVM variable
         run: |
           NOW=$(date +%d%m%Y)
-          echo "" >> ${{ env.PROJECT }}/reportportal.properties
-          echo "rp.description=Regression $NOW - Github Action #$GITHUB_RUN_NUMBER" >> ${{ env.PROJECT }}/reportportal.properties
-          echo "rp.attributes=release:$NOW" >> ${{ env.PROJECT }}/reportportal.properties
-          cat ${{ env.PROJECT }}/reportportal.properties
-          cp ${{ env.PROJECT }}/reportportal.properties ${{ env.PROJECT }}/src/test/resources/reportportal.properties
-
-      - name: Run Regression
-        run: mvn -pl ${PROJECT} verify -q
+          mvn -pl ${PROJECT} verify -q -Drp.endpoint=${rp.endpoint} -Drp.api.key=${rp.api.key} -Drp.description="Regression ${NOW} - Github Action #${GITHUB_RUN_NUMBER}" -Drp.attributes=release:${NOW}
+        env:
+          rp.endpoint: ${{ secrets.RP_ENDPOINT }}
+          rp.api.key: ${{ secrets.RP_API_KEY }}
 
       # Optional. It will take some artifact storage quota.
-      # Disable if dont needed. 
+      # Disable if dont needed.
       - name: Uploading Result Data
         if: ${{ success() || failure() }}
         uses: actions/upload-artifact@v2
@@ -68,7 +63,7 @@ jobs:
           name: Result
           path: ${{ env.PROJECT }}/target/site
 
-      # Need Zephyr Scale Key preconfigured.    
+      # Need Zephyr Scale Key preconfigured.
       - name: Sending Result to Zephyr Scale
         if: ${{ success() || failure() }}
         env:
