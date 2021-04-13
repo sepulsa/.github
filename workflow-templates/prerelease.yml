@@ -1,0 +1,31 @@
+name: "Post-Integration: Prerelease"
+
+on:
+  pull_request:
+    branches: [ $default-branch ]
+    types: [ closed ]
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-20.04
+    if: github.event.pull_request.merged == true
+    outputs:
+      key: ${{ steps.prerelease-tag.outputs.key }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - id: prerelease-tag
+        uses: sepulsa/prerelease-action@main
+        with:
+          branch: ${{ github.head_ref }}
+
+  deploy:
+    needs: prerelease
+    runs-on: ubuntu-20.04
+    if: needs.prerelease.outputs.key
+    environment:
+      name: staging:${{ needs.prerelease.outputs.key }}
+      url: https://${{ needs.prerelease.outputs.key }}.example.com
+    steps:
+      - run: echo 'Deployed'
