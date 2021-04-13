@@ -1,0 +1,26 @@
+name: "Post-Integration: Release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        required: true
+        description: 'The JIRA Issue Key'
+
+jobs:
+  release:
+    runs-on: ubuntu-20.04
+    steps:
+      # Convert input to UPPERCASE
+      - id: key
+        run: echo "::set-output name=key::${KEY^^}"
+        env:
+          KEY: ${{ github.event.inputs.key }}
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.key.outputs.key }}
+          fetch-depth: 0
+      - uses: sepulsa/release-action@main
+        with:
+          key: ${{ steps.key.outputs.key }}
+          token: ${{ secrets.RELEASE_TOKEN }}
