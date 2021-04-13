@@ -1,4 +1,4 @@
-name: "Post-Integration: Prerelease"
+name: "Post-Integration: Prerelease + Regression Test"
 
 on:
   pull_request:
