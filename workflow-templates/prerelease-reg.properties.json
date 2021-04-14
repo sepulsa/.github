@@ -1,0 +1,7 @@
+{
+  "name": "Post-Integration: Prerelease + Regression Test",
+  "description": "Post-Integration: Prerelease + Regression Test workflow template.",
+  "categories": [
+    "Automation"
+  ]
+}
