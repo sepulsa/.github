@@ -1,8 +1,0 @@
-{
-  "name": "Post-Integration: Manual Regression Test",
-  "description": "Post-Integration: Manual Regression Test workflow template.",
-  "iconName": "maven",
-  "categories": [
-    "Automation"
-  ]
-}
