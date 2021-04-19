@@ -1,9 +1,6 @@
 name: "Post-Integration: Regression Test"
 
 on:
-  # push event won't be used, because the env has to be deployed before running the regression 
-  # push:
-  #   branches: [ $default-branch ]
   workflow_dispatch:
     inputs:
       key:
@@ -18,7 +15,6 @@ env:
   # Domain of URL for accesing the env 
   DOMAIN: ""
   TICKET: "${{ github.event.inputs.key }}"
-  STG_ENV: "https://${{ github.event.inputs.key }}.${{ env.DOMAIN }}"
 
 jobs:
   test:
@@ -40,6 +36,10 @@ jobs:
             exit 1
           fi
 
+      - name: Set Environment URL
+        run: |
+          echo "STG_ENV=https://${{ github.event.inputs.key }}.${DOMAIN}" >> $GITHUB_ENV
+
       - uses: actions/checkout@v2
         with:
           repository: ${{ env.REPOSITORY }}
@@ -58,25 +58,15 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml', '${{ env.PROJECT }}/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      # Set report portal parameters environment variables
-      # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
-      # - name: Set Report Portal Parameters
-      #   run: |
-      #     NOW=$(date +%d%m%Y)
-      #     echo "rp.description='Regression ${NOW} - Github Action #${GITHUB_RUN_NUMBER}'" >> $GITHUB_ENV
-      #     echo "rp.attributes=release:${NOW}" >> $GITHUB_ENV
-
       - name: Run Regression
         run: |
+          NOW=$(date +%d%m%Y)
           mvn -pl ${PROJECT} verify -q \
           -Dwebdriver.base.url=${STG_ENV} \
           -Drp.endpoint=${{ secrets.RP_ENDPOINT }} \
           -Drp.api.key=${{ secrets.RP_API_KEY }} \
           -Drp.description="Regression ${NOW} - Github Action #${GITHUB_RUN_NUMBER}" \
           -Drp.attributes=release:${NOW}
-        # env:
-        #   rp.endpoint: ${{ secrets.RP_ENDPOINT }}
-        #   rp.api.key: ${{ secrets.RP_API_KEY }}
 
       # Optional. It will take some artifact storage quota.
       # Disable if dont needed.

@@ -2,9 +2,8 @@ name: "Post-Integration: Prerelease"
 
 on:
   pull_request:
-    branches:
-      - master
-    types: closed
+    branches: [ $default-branch ]
+    types: [ closed ]
 
 jobs:
 
@@ -14,7 +13,6 @@ jobs:
     outputs:
       key: ${{ steps.prerelease-tag.outputs.key }}
     steps:
-      - run: echo head_ref is ${{ github.head_ref }} | cut -d'/' -f 2
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
@@ -31,9 +29,7 @@ jobs:
       name: staging:${{ needs.prerelease.outputs.key }}
       url: https://${{ needs.prerelease.outputs.key }}.example.com
     steps:
-      - run: |
-          echo 'Deployed'
-          echo the branch name is ${{ needs.prerelease.outputs.key }}
+      - run: echo 'Deployed'
 
   regression:
     needs: [prerelease, deploy]
@@ -46,7 +42,6 @@ jobs:
       # Domain of URL for accesing the env 
       DOMAIN: ""
       TICKET: "${{ needs.prerelease.outputs.key }}"
-      STG_ENV: "https://${{ needs.prerelease.outputs.key }}.example.com"
     steps:
       - name: Check if variable is empty
         run: |
@@ -62,6 +57,11 @@ jobs:
             echo "::error::'DOMAIN' environment variable must be set"
             exit 1
           fi
+
+      - name: Set Environment URL
+        run: |
+          echo "STG_ENV=https://${{ github.event.inputs.key }}.${DOMAIN}" >> $GITHUB_ENV
+
       - uses: actions/checkout@v2
         with:
           repository: ${{ env.REPOSITORY }}
@@ -80,13 +80,6 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml', '${{ env.PROJECT }}/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      # Set report portal parameters environment variables
-      # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
-      # - name: Set Report Portal Parameters
-      #   run: |
-      #     NOW=$(date +%d%m%Y)
-      #     echo "rp.description='Regression ${NOW} - Github Action #${GITHUB_RUN_NUMBER}'" >> $GITHUB_ENV
-      #     echo "rp.attributes=release:${NOW}" >> $GITHUB_ENV
       - name: Run Regression
         run: |
           NOW=$(date +%d%m%Y)
@@ -96,9 +89,6 @@ jobs:
           -Drp.api.key=${{ secrets.RP_API_KEY }} \
           -Drp.description="Regression ${NOW} - Github Action #${GITHUB_RUN_NUMBER}" \
           -Drp.attributes=release:${NOW}
-        # env:
-        #   rp.endpoint: ${{ secrets.RP_ENDPOINT }}
-        #   rp.api.key: ${{ secrets.RP_API_KEY }}
 
       # Optional. It will take some artifact storage quota.
       # Disable if dont needed.
@@ -108,6 +98,7 @@ jobs:
         with:
           name: Result
           path: ${{ env.PROJECT }}/target/site
+          retention-days: 2
 
       # Need Zephyr Scale Key preconfigured.
       - name: Sending Result to Zephyr Scale
