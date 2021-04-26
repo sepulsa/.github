@@ -25,16 +25,19 @@ jobs:
     needs: prerelease
     runs-on: ubuntu-20.04
     if: needs.prerelease.outputs.key
-    env:
+    environment:
       name: staging:${{ needs.prerelease.outputs.key }}
+      url: https://${{ needs.prerelease.outputs.key }}.example.com      
+    env:
       # Your system name ex: proteus-core
       SYSTEM_NAME: ""
       #Env URL
       URL: "$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}"
-      # Kubernetes endpoint/ingress IP address 
-      INGRESS_ENDPOINT: ""      
+      # Kubernetes endpoint/ingress IP address
+      INGRESS_ENDPOINT: ""
     steps:
-      - name: Configure AWS credentials from Test account
+      - run: echo 'Deployed'
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
