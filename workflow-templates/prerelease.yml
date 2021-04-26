@@ -25,11 +25,33 @@ jobs:
     needs: prerelease
     runs-on: ubuntu-20.04
     if: needs.prerelease.outputs.key
-    environment:
+    env:
       name: staging:${{ needs.prerelease.outputs.key }}
-      url: https://${{ needs.prerelease.outputs.key }}.example.com
+      # Your system name ex: proteus-core
+      SYSTEM_NAME: ""
+      #Env URL
+      URL: "$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}"
+      # Kubernetes endpoint/ingress IP address 
+      INGRESS_ENDPOINT: ""      
     steps:
-      - run: echo 'Deployed'
+      - name: Configure AWS credentials from Test account
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY_ID }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - id: create-domain
+        uses: sepulsa/post-integration-action/route-domain@main
+        with:
+          action: CREATE
+          name: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}
+          type: CNAME
+          dns-record: ${{ secrets.INGRESS_ENDPOINT }}
+          zone-id: ${{ secrets.ROUTE53_HOSTED_ZONE_ID }}
+      - name: Environment URL
+        run: |
+          echo $URL
+       
 
   regression:
     needs: [prerelease, deploy]
