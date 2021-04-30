@@ -5,6 +5,10 @@ on:
     branches: [ $default-branch ]
     types: [ closed ]
 
+env:
+  # Your system name for example proteus-core 
+  SYSTEM_NAME: ""
+
 jobs:
 
   prerelease:
@@ -27,12 +31,10 @@ jobs:
     if: needs.prerelease.outputs.key
     environment:
       name: staging:${{ needs.prerelease.outputs.key }}
-      url: https://${{ secrets.SYSTEM_NAME }}-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}     
+      url: https://${{ secrets.SYSTEM_NAME }}-${{ needs.prerelease.outputs.key }}.example.com
     env:
-      # Your system name for example proteus-core
-      SYSTEM_NAME: ""
       # Environment URL
-      URL: "$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}"
+      URL: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
       # Kubernetes endpoint/ingress IP address
       INGRESS_ENDPOINT: ""
       #AWS EKS cluster region
@@ -41,7 +43,7 @@ jobs:
       AWS_CLUSTER_NAME: ""
       #Kubernetes namespace
       K8S_NAMESPACE: ""
-      # Kubernetes whitelist ip address
+      # Kubernetes whitelist IP address
       K8S_WHITELIST_IP: ""
       # Kubernetes service name
       K8S_SERVICE_NAME: ""
@@ -50,10 +52,6 @@ jobs:
     steps:
       - name: Check if variable is empty
         run: |
-          if [ -z "${SYSTEM_NAME}" ]; then
-            echo "::error::'SYSTEM_NAME' environment variable must be set"
-            exit 1
-          fi
           if [ -z "${INGRESS_ENDPOINT}" ]; then
             echo "::error::'INGRESS_ENDPOINT' environment variable must be set"
             exit 1
@@ -92,14 +90,13 @@ jobs:
           EKS_SECRET_ACCESS_KEY: ${{ secrets.EKS_ALTERRA_ID_SECRET_ACCESS_KEY }}
       - name: Create kubeconfig
         run: |
-          brew install aws-iam-authenticator
           aws eks --region $AWS_CLUSTER_REGION update-kubeconfig --name $AWS_CLUSTER_NAME
       - uses: sepulsa/post-integration-action/create-ingress@ingress-standalone
         with:
           name: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}
           namespace: $K8S_NAMESPACE
           whitelist-ip: $K8S_WHITELIST_IP
-          host: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}
+          host: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
           service-name: $K8S_SERVICE_NAME
           service-port: $K8S_SERVICE_PORT      
 
@@ -113,7 +110,7 @@ jobs:
         uses: sepulsa/post-integration-action/route-domain@main
         with:
           action: CREATE
-          name: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.${{ secrets.DOMAIN }}
+          name: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
           type: CNAME
           dns-record: $INGRESS_ENDPOINT
           zone-id: ${{ secrets.ROUTE53_HOSTED_ZONE_ID }}
@@ -127,10 +124,6 @@ jobs:
       REPOSITORY: ""
       # Maven project under monorepo of regression test.
       PROJECT: ""
-      # Domain of URL for accesing the env 
-      DOMAIN: ""
-      # Your system name for example proteus-core
-      SYSTEM_NAME: ""
       TICKET: "${{ needs.prerelease.outputs.key }}"
     steps:
       - name: Check if variable is empty
@@ -147,14 +140,10 @@ jobs:
             echo "::error::'NAME' environment variable must be set"
             exit 1
           fi
-          if [ -z "${DOMAIN}" ]; then
-            echo "::error::'DOMAIN' environment variable must be set"
-            exit 1
-          fi
 
       - name: Set Environment URL
         run: |
-          echo "STG_ENV=https://${SYSTEM_NAME}-${{ needs.prerelease.outputs.key }}.${DOMAIN}" >> $GITHUB_ENV
+          echo "STG_ENV=https://$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com" >> $GITHUB_ENV
 
       - uses: actions/checkout@v2
         with:
