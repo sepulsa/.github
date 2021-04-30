@@ -31,7 +31,7 @@ jobs:
     if: needs.prerelease.outputs.key
     environment:
       name: staging:${{ needs.prerelease.outputs.key }}
-      url: https://${{ secrets.SYSTEM_NAME }}-${{ needs.prerelease.outputs.key }}.example.com
+      url: https://$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
     env:
       # Environment URL
       URL: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
