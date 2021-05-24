@@ -6,8 +6,9 @@ on:
     types: [ closed ]
 
 env:
-  # Your system name for example proteus-core 
-  SYSTEM_NAME: ""
+  SUBDOMAIN_PREFIX: ""
+  # Domain of URL for accesing the env
+  DOMAIN: ""
 
 jobs:
 
@@ -16,12 +17,13 @@ jobs:
     if: github.event.pull_request.merged == true
     outputs:
       key: ${{ steps.prerelease-tag.outputs.key }}
+      tag: ${{ steps.prerelease-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
       - id: prerelease-tag
-        uses: sepulsa/prerelease-action@main
+        uses: sepulsa/post-integration-action/prerelease@main
         with:
           branch: ${{ github.head_ref }}
 
@@ -31,90 +33,64 @@ jobs:
     if: needs.prerelease.outputs.key
     environment:
       name: staging:${{ needs.prerelease.outputs.key }}
-      url: https://$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
+      url: https://${{ env.SUBDOMAIN_PREFIX }}-${{ needs.prerelease.outputs.key }}.${{ env.DOMAIN }}
     env:
-      # Environment URL
-      URL: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
-      # Kubernetes endpoint/ingress IP address
-      INGRESS_ENDPOINT: ""
-      #AWS EKS cluster region
-      AWS_CLUSTER_REGION: ""
-      #AWS EKS cluster name
-      AWS_CLUSTER_NAME: ""
-      #Kubernetes namespace
-      K8S_NAMESPACE: ""
-      # Kubernetes whitelist IP address
-      K8S_WHITELIST_IP: ""
-      # Kubernetes service name
-      K8S_SERVICE_NAME: ""
-      #Kubernetes service port
-      K8S_SERVICE_PORT: ""
+      KEY: ${{ needs.prerelease.outputs.key }}
     steps:
       - name: Check if variable is empty
         run: |
-          if [ -z "${INGRESS_ENDPOINT}" ]; then
-            echo "::error::'INGRESS_ENDPOINT' environment variable must be set"
+          if [ -z "${SUBDOMAIN_PREFIX}" ]; then
+            echo "::error::'SUBDOMAIN_PREFIX' environment variable must be set"
             exit 1
           fi
-          if [ -z "${AWS_CLUSTER_REGION}" ]; then
-            echo "::error::'AWS_CLUSTER_REGION' environment variable must be set"
+          if [ -z "${DOMAIN}" ]; then
+            echo "::error::'DOMAIN' environment variable must be set"
             exit 1
           fi
-          if [ -z "${AWS_CLUSTER_NAME}" ]; then
-            echo "::error::'AWS_CLUSTER_NAME' environment variable must be set"
-            exit 1
-          fi
-          if [ -z "${K8S_NAMESPACE}" ]; then
-            echo "::error::'K8S_NAMESPACE' environment variable must be set"
-            exit 1
-          fi
-          if [ -z "${K8S_WHITELIST_IP}" ]; then
-            echo "::error::'K8S_WHITELIST_IP' environment variable must be set"
-            exit 1
-          fi
-          if [ -z "${K8S_SERVICE_NAME}" ]; then
-            echo "::error::'K8S_SERVICE_NAME' environment variable must be set"
-            exit 1
-          fi
-          if [ -z "${K8S_SERVICE_PORT}" ]; then
-            echo "::error::'K8S_SERVICE_PORT' environment variable must be set"
-            exit 1
-          fi
-      - run: echo 'Deployed'
-      # Configure AWS Credentials for EKS
-      - run: |
-          aws configure set aws_access_key_id $EKS_ACCESS_KEY_ID
-          aws configure set aws_secret_access_key $EKS_SECRET_ACCESS_KEY
-        env:
-          EKS_ACCESS_KEY_ID: ${{ secrets.EKS_ALTERRA_ID_ACCESS_KEY_ID }}
-          EKS_SECRET_ACCESS_KEY: ${{ secrets.EKS_ALTERRA_ID_SECRET_ACCESS_KEY }}
-      - name: Create kubeconfig
-        run: |
-          aws eks --region $AWS_CLUSTER_REGION update-kubeconfig --name $AWS_CLUSTER_NAME
-      - uses: sepulsa/post-integration-action/create-ingress@ingress-standalone
+      - uses: actions/checkout@v2
+      # Cache terraform
+      - uses: actions/cache@v2
         with:
-          name: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}
-          namespace: $K8S_NAMESPACE
-          whitelist-ip: $K8S_WHITELIST_IP
-          host: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
-          service-name: $K8S_SERVICE_NAME
-          service-port: $K8S_SERVICE_PORT      
-
-      - name: Configure AWS credentials for Route53
+          path: .terraform/providers
+          key: ${{ runner.os }}-terraform-${{ hashFiles('.terraform.lock.hcl') }}
+          restore-keys: ${{ runner.os }}-terraform-
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - id: create-domain
-        uses: sepulsa/post-integration-action/route-domain@main
+          aws-region: ap-southeast-1
+      - name: Create kubeconfig
+        run: aws eks update-kubeconfig --name ${K8S_CLUSTER}
+        env:
+          K8S_CLUSTER: ""
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
         with:
-          action: CREATE
-          name: $SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com
-          type: CNAME
-          dns-record: $INGRESS_ENDPOINT
-          zone-id: ${{ secrets.ROUTE53_HOSTED_ZONE_ID }}
-       
+          terraform_wrapper: false
+      - name: Terraform Format
+        run: terraform fmt -check
+      - name: Terraform Init
+        run: terraform init -backend-config bucket=${TF_S3_BUCKET} -backend-config key=${TF_S3_KEY}
+        env:
+          TF_S3_BUCKET: ""
+          TF_S3_KEY: ""
+      - run: terraform workspace new ${KEY} || terraform workspace select ${KEY}
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -var namespace=${NAMESPACE_PREFIX}-${KEY,,} -var host=${SUBDOMAIN_PREFIX}-${KEY,,}.${DOMAIN}
+        env:
+          KUBE_CONFIG_PATH: ~/.kube/config
+          NAMESPACE_PREFIX: ""
+          # Terraform input
+          TF_VAR_route53_access_key: ${{ secrets.ROUTE53_ACCESS_KEY_ID }}
+          TF_VAR_route53_secret_key: ${{ secrets.ROUTE53_SECRET_ACCESS_KEY }}
+          TF_VAR_route53_region: ap-southeast-1
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_HOSTED_ZONE_ID }}
+          # @see https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/ResourceRecordTypes.html
+          # for possible dns record type
+          TF_VAR_route53_type: ""
+          # Define additional terraform input here
+          # @see https://www.terraform.io/docs/language/values/variables.html#environment-variables
 
   regression:
     needs: [prerelease, deploy]
@@ -136,15 +112,9 @@ jobs:
             echo "::error::'PROJECT' environment variable must be set"
             exit 1
           fi
-          if [ -z "${SYSTEM_NAME}" ]; then
-            echo "::error::'NAME' environment variable must be set"
-            exit 1
-          fi
-
       - name: Set Environment URL
         run: |
-          echo "STG_ENV=https://$SYSTEM_NAME-${{ needs.prerelease.outputs.key }}.example.com" >> $GITHUB_ENV
-
+          echo "STG_ENV=https://${SUBDOMAIN_PREFIX}-${TICKET}.${DOMAIN}" >> $GITHUB_ENV
       - uses: actions/checkout@v2
         with:
           repository: ${{ env.REPOSITORY }}
