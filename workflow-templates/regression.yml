@@ -12,7 +12,8 @@ env:
   REPOSITORY: ""
   # Maven project under monorepo of regression test.
   PROJECT: ""
-  # Domain of URL for accesing the env 
+  SUBDOMAIN_PREFIX: ""
+  # Domain of URL for accesing the env
   DOMAIN: ""
   TICKET: "${{ github.event.inputs.key }}"
 
@@ -31,15 +32,17 @@ jobs:
             echo "::error::'PROJECT' environment variable must be set"
             exit 1
           fi
+          if [ -z "${SUBDOMAIN_PREFIX}" ]; then
+            echo "::error::'SUBDOMAIN_PREFIX' environment variable must be set"
+            exit 1
+          fi
           if [ -z "${DOMAIN}" ]; then
             echo "::error::'DOMAIN' environment variable must be set"
             exit 1
           fi
-
       - name: Set Environment URL
         run: |
-          echo "STG_ENV=https://${{ github.event.inputs.key }}.${DOMAIN}" >> $GITHUB_ENV
-
+          echo "STG_ENV=https://${SUBDOMAIN_PREFIX}-${TICKET}.${DOMAIN}" >> $GITHUB_ENV
       - uses: actions/checkout@v2
         with:
           repository: ${{ env.REPOSITORY }}
