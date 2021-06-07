@@ -1,6 +1,6 @@
 {
   "name": "Post-Integration: Release",
-  "description": "Post-Integration: Release workflow template.",
+  "description": "Create release tag and teardown previously provisioned staging environment.",
   "categories": [
     "Automation"
   ]

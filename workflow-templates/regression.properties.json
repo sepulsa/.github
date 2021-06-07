@@ -1,6 +1,6 @@
 {
   "name": "Post-Integration: Regression Test",
-  "description": "Post-Integration: Regression Test workflow template.",
+  "description": "Trigger automated regression test.",
   "iconName": "maven",
   "categories": [
     "Automation"

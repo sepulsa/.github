@@ -1,6 +1,6 @@
 {
   "name": "Post-Integration: Prerelease",
-  "description": "Post-Integration: Prerelease workflow template.",
+  "description": "Create release candidate tag, build docker image, deploy to staging environment using terraform, and run automated regression test.",
   "categories": [
     "Automation"
   ]
