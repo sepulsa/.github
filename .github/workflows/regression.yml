@@ -1,0 +1,80 @@
+name: "Post-Integration: Regression Test"
+
+on:
+  workflow_call:
+    inputs:
+      key:
+        required: true
+        type: string
+        description: 'The JIRA Issue Key.'
+      repository:
+        required: true
+        type: string
+        description: 'Repository name with owner.'
+      ref:
+        required: false
+        type: string
+        default: master
+        description: 'The branch, tag or SHA to checkout.'
+    secrets:
+      token:
+        required: true
+        description: 'Personal access token (PAT) used to fetch the repository.'
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.token }}
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+
+      - name: Cache local Maven repository
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+#      - name: Run Regression
+#        run: |
+#          NOW=$(date +%d%m%Y)
+#          mvn -pl ${PROJECT} verify -q \
+#          -Dwebdriver.base.url=${STG_ENV} \
+#          -Drp.endpoint=${{ secrets.RP_ENDPOINT }} \
+#          -Drp.api.key=${{ secrets.RP_API_KEY }} \
+#          -Drp.description="Regression ${NOW} - Github Action #${GITHUB_RUN_NUMBER}" \
+#          -Drp.attributes=release:${NOW}
+
+      # Optional. It will take some artifact storage quota.
+      # Disable if dont needed.
+#      - name: Uploading Result Data
+#        if: ${{ success() || failure() }}
+#        uses: actions/upload-artifact@v2
+#        with:
+#          name: Result
+#          path: ${{ env.PROJECT }}/target/site
+#          retention-days: 3
+
+      # Need Zephyr Scale Key preconfigured.
+#      - name: Sending Result to Zephyr Scale
+#        if: ${{ success() || failure() }}
+#        env:
+#          ZEPHYR_API_KEY: ${{ secrets.TM4J_KEY }}
+#          PROJECT_KEY: ABCD
+#          JSON_PATH: ${{ env.PROJECT }}/target/cucumber-parallel/*.json
+#        run: |
+#          zip result.zip $JSON_PATH
+#          curl --request POST \
+#              --url "https://api.adaptavist.io/tm4j/v2/automations/executions/cucumber?projectKey=$PROJECT_KEY&autoCreateTestCases=false" \
+#              --header "Authorization: Bearer $ZEPHYR_API_KEY" \
+#              --header 'content-type: multipart/form-data' \
+#              --form "file=@result.zip;type=application/x-zip-compressed"
